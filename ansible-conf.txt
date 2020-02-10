@@ -1,0 +1,114 @@
+Ansible server has been created to automate the Infra related work on ec2 machines. Ansible server has been created in each account unless we have cross account VPC peering and then only one server should be sufficient to access servers in different accounts.
+
+
+
+Ansible Setup:
+Create new server from latest Amazon AMI - for ex: Amazon Linux AMI 2017.09.1 (HVM), SSD Volume Type - ami-97785bed (N. Virginia region) in Operation VPC (VPC-1)
+Mount the external volume
+sudo mkfs -t ext4 /dev/xvdb
+sudo mkdir mount_point /opt/application
+sudo mount /dev/xvdb /opt/application
+sudo file -s /dev/xvdb
+
+Edit the fstab file.... /etc/fstab
+
+/dev/xvdb /opt/application ext4 rw,relatime,data=ordered 0 0
+Create new user "devops" with ssh key pairs
+sudo useradd devops
+sudo passwd devops
+
+sudo usermod -aG wheel devops
+
+ssh-keygen -t rsa -b 4096 -C "devops-ansible@genpact.digital"
+Install some pre-requisites (if required)
+$ sudo yum install git asciidoc python-setuptools rpm-build python2-devel -y
+
+$ sudo curl -O https://bootstrap.pypa.io/get-pip.py
+$ sudo python get-pip.py
+$ sudo pip install awscli --ignore-installed six (if required to install awscli)
+
+----------------Ansible Installation Steps-----------------------------------------------
+
+$ cd /opt/application
+$ mkdir ansible-redhat && cd ansible-redhat
+$ git clone git://github.com/ansible/ansible.git (from dev branch - latest version 2.5 )
+or 
+ 
+--for stable version
+ 
+git clone -b stable-2.4 https://github.com/ansible/ansible.git
+$ cd ./ansible
+$ make rpm
+$ sudo yum install python-jinja2 python-paramiko python-cryptography sshpass -y
+If still does not work for paramiko and sshpass
+******* Red Hat Enterprise Linux 7.x / Amazon Linux********
+
+$ wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+$ sudo rpm -Uvh epel-release-latest-7*.rpm
+$ sudo yum install python-paramiko sshpass -y
+$ sudo rpm -Uvh ./rpm-build/ansible-*.noarch.rpm
+
+-----------If above failes install ansible via epel repo-------------
+
+$ sudo yum-config-manager --enable epel
+
+To check if epel is enabled or not
+$ yum repolist
+$ yum install ansible
+
+----------------Ansible verification --------------
+
+$ ansible --version
+
+----------------------------------------------------
+Ansible setup to work on different path
+
+$ cd /opt/application/playbooks
+$ vi config.cfg and paste the below conf there
+
+[defaults]
+# uncomment this to disable SSH key host checking
+host_key_checking = False
+deprecation_warnings=False
+roles_path = roles:roles/apps:roles/components
+inventory = environments/pt/hosts
+
+$ create 2 folders with the name environments and roles
+$ cd environments
+$ mkdir hosts && vi hosts
+under hosts file make the below entry
+
+[localhost]
+127.0.0.1
+
+[cor-server]
+ip address
+
+
+
+Create role "aws-devops-permissions" for assigning it to the Ansible server
+Create new policy for listing and passing roles "IAMROLEACCESS". Below is the details for this policy:
+{
+ "Version": "2012-10-17",
+ "Statement": [
+ {
+ "Effect": "Allow",
+ "Action": [
+ "kms:ListAliases",
+ "kms:DescribeKey"
+ ],
+ "Resource": "*"
+ },
+ {
+ "Effect": "Allow",
+ "Action": [
+ "iam:GetRole",
+ "iam:PassRole",
+ "iam:CreateRole",
+ "iam:AttachRolePolicy"
+ ],
+ "Resource": "*"
+ }
+ ]
+}
+Add role to the group "Power Users" and assign the policy created above
